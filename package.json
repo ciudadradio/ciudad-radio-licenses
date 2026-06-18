@@ -1,0 +1,12 @@
+{
+  "name": "ciudad-radio-license-server",
+  "version": "1.0.0",
+  "description": "Servidor de licencias para Ciudad Radio — Image Media Club",
+  "type": "module",
+  "main": "license-server.mjs",
+  "scripts": {
+    "start": "node license-server.mjs",
+    "dev": "node --watch license-server.mjs"
+  },
+  "engines": { "node": ">=18" }
+}

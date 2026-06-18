@@ -1,0 +1,11 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node license-server.mjs"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[[services]]
+name = "license-server"

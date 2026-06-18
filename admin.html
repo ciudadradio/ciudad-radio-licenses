@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin — Image Media Club Licenses</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#050a14;color:#dbe7f3;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+header{background:#0a1628;border-bottom:1px solid #1e3050;padding:16px 32px;display:flex;align-items:center;justify-content:space-between;}
+header h1{font-size:18px;color:#fff;}header span{font-size:12px;color:#718398;}
+.main{padding:28px 32px;}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px;}
+.stat{background:#0a1628;border:1px solid #1e3050;border-radius:10px;padding:16px;}
+.stat span{display:block;font-size:10px;color:#718398;text-transform:uppercase;font-weight:700;margin-bottom:6px;}
+.stat strong{font-size:28px;color:#fff;}
+.stat.green strong{color:#1d9e75;} .stat.red strong{color:#c9033b;} .stat.yellow strong{color:#c99b22;}
+.toolbar{display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
+input,select{background:#08101d;border:1px solid #1e3050;border-radius:6px;padding:8px 12px;color:#dbe7f3;font-size:13px;}
+input:focus,select:focus{outline:none;border-color:#c9033b;}
+.btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;}
+.btn.primary{background:#c9033b;color:#fff;} .btn.green{background:#1d9e75;color:#fff;} .btn.secondary{background:#1e3050;color:#dbe7f3;}
+.btn:hover{opacity:.85;}
+table{width:100%;border-collapse:collapse;background:#0a1628;border-radius:10px;overflow:hidden;}
+th{padding:10px 14px;font-size:10px;text-transform:uppercase;color:#718398;font-weight:700;text-align:left;background:#08101d;border-bottom:1px solid #1e3050;}
+td{padding:11px 14px;font-size:13px;border-bottom:1px solid #0d1f38;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,0.02);}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;}
+.badge.activa{background:rgba(29,158,117,0.15);color:#7ee0bd;border:1px solid #1d9e75;}
+.badge.pendiente{background:rgba(201,155,34,0.15);color:#ffd37a;border:1px solid #c99b22;}
+.badge.vencida,.badge.expired{background:rgba(201,3,59,0.15);color:#ff9ab6;border:1px solid #c9033b;}
+.badge.revocada{background:rgba(113,131,152,0.15);color:#718398;border:1px solid #2a3f55;}
+.modal-bg{position:fixed;inset:0;background:rgba(5,10,20,0.9);display:none;align-items:center;justify-content:center;z-index:999;}
+.modal-bg.open{display:flex;}
+.modal{background:#0a1628;border:1px solid #1e3050;border-radius:14px;padding:28px;width:480px;max-width:95vw;}
+.modal h3{color:#fff;margin-bottom:20px;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:11px;color:#718398;text-transform:uppercase;font-weight:700;margin-bottom:5px;}
+.field input,.field select{width:100%;}
+.modal-footer{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1d9e75;color:#fff;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;display:none;z-index:9999;}
+.mono{font-family:monospace;font-size:12px;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔑 Image Media Club — Panel de Licencias</h1>
+  <div style="display:flex;gap:12px;align-items:center;">
+    <span id="server-status">Conectando...</span>
+    <input id="admin-secret" type="password" placeholder="Admin secret" style="width:200px;" value="">
+    <button class="btn primary" onclick="loadLicenses()">Conectar</button>
+  </div>
+</header>
+
+<div class="main">
+  <div class="stats">
+    <div class="stat green"><span>Activas</span><strong id="stat-active">—</strong></div>
+    <div class="stat yellow"><span>Pendientes</span><strong id="stat-pending">—</strong></div>
+    <div class="stat red"><span>Vencidas</span><strong id="stat-expired">—</strong></div>
+    <div class="stat"><span>Total</span><strong id="stat-total">—</strong></div>
+  </div>
+
+  <div class="toolbar">
+    <input id="search" type="text" placeholder="Buscar cliente, código..." oninput="renderTable()" style="width:260px;">
+    <select id="filter-status" onchange="renderTable()">
+      <option value="">Todas</option>
+      <option value="activa">Activas</option>
+      <option value="pendiente">Pendientes</option>
+      <option value="vencida">Vencidas</option>
+      <option value="revocada">Revocadas</option>
+    </select>
+    <button class="btn green" onclick="openGenerateModal()">+ Generar licencia</button>
+    <button class="btn secondary" onclick="loadLicenses()">↺ Refrescar</button>
+    <button class="btn secondary" onclick="exportCsv()">⬇ Exportar CSV</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Código</th>
+        <th>Cliente</th>
+        <th>Plan</th>
+        <th>Estado</th>
+        <th>Emisora</th>
+        <th>Días restantes</th>
+        <th>Última vez visto</th>
+        <th>Versión</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody id="license-table-body">
+      <tr><td colspan="9" style="text-align:center;color:#718398;padding:32px;">Conectá el servidor para ver las licencias</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal generar licencia -->
+<div class="modal-bg" id="gen-modal">
+  <div class="modal">
+    <h3>Generar nueva licencia</h3>
+    <div class="field"><label>Cliente / Nombre de la radio</label><input id="gen-client" type="text" placeholder="Ej: Radio Ejemplo - Buenos Aires"></div>
+    <div class="field"><label>Email</label><input id="gen-email" type="email" placeholder="cliente@radio.com"></div>
+    <div class="field"><label>Plan</label>
+      <select id="gen-plan"><option>Demo</option><option selected>Profesional</option><option>Enterprise</option></select>
+    </div>
+    <div class="field"><label>Validez</label>
+      <select id="gen-days"><option value="30">30 días</option><option value="90">90 días</option><option value="180">6 meses</option><option value="365" selected>1 año</option><option value="730">2 años</option><option value="0">Sin vencimiento</option></select>
+    </div>
+    <div class="field"><label>Notas internas</label><input id="gen-notes" type="text" placeholder="Notas opcionales"></div>
+    <div id="gen-result" style="display:none;padding:12px;background:#08101d;border-radius:8px;margin-top:12px;">
+      <div style="font-size:11px;color:#718398;margin-bottom:6px;">CÓDIGO GENERADO — copiá y envialo al cliente:</div>
+      <div id="gen-code" class="mono" style="font-size:18px;color:#fff;letter-spacing:2px;cursor:pointer;" onclick="copyGenCode()"></div>
+      <div style="font-size:11px;color:#718398;margin-top:6px;">Hacé clic en el código para copiar</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn secondary" onclick="closeGenerateModal()">Cerrar</button>
+      <button class="btn green" onclick="generateLicense()">Generar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+var _licenses = [];
+var _serverUrl = '';
+
+function getServerUrl(){
+  return (document.getElementById('admin-secret') && window.location.hostname !== 'localhost')
+    ? window.location.origin
+    : 'http://localhost:3900';
+}
+
+function getSecret(){
+  return document.getElementById('admin-secret')?.value.trim() || '';
+}
+
+function toast(msg, color){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = color || '#1d9e75';
+  t.style.display = 'block';
+  setTimeout(function(){ t.style.display = 'none'; }, 3000);
+}
+
+async function loadLicenses(){
+  var url = getServerUrl();
+  var secret = getSecret();
+  if(!secret){ toast('Ingresá el admin secret','#c9033b'); return; }
+  try{
+    var res = await fetch(url + '/api/licenses', { headers:{ Authorization: 'Bearer ' + secret } });
+    if(!res.ok){ toast('Error de autenticación','#c9033b'); return; }
+    var data = await res.json();
+    _licenses = data.licenses || [];
+    document.getElementById('server-status').textContent = '✓ Conectado — ' + url;
+    updateStats();
+    renderTable();
+    toast('Cargadas ' + _licenses.length + ' licencias');
+  }catch(e){
+    document.getElementById('server-status').textContent = '✗ Sin conexión';
+    toast('No se pudo conectar al servidor','#c9033b');
+  }
+}
+
+function updateStats(){
+  var active = _licenses.filter(function(l){ return l.status === 'activa' && !l.expired; }).length;
+  var pending = _licenses.filter(function(l){ return l.status === 'pendiente'; }).length;
+  var expired = _licenses.filter(function(l){ return l.expired || l.status === 'vencida'; }).length;
+  document.getElementById('stat-active').textContent = active;
+  document.getElementById('stat-pending').textContent = pending;
+  document.getElementById('stat-expired').textContent = expired;
+  document.getElementById('stat-total').textContent = _licenses.length;
+}
+
+function renderTable(){
+  var search = document.getElementById('search').value.toLowerCase();
+  var filterStatus = document.getElementById('filter-status').value;
+  var filtered = _licenses.filter(function(l){
+    var matchSearch = !search || (l.client||'').toLowerCase().includes(search) || (l.code||'').toLowerCase().includes(search) || (l.email||'').toLowerCase().includes(search);
+    var matchStatus = !filterStatus || l.status === filterStatus || (filterStatus === 'vencida' && l.expired);
+    return matchSearch && matchStatus;
+  });
+  var tbody = document.getElementById('license-table-body');
+  if(!filtered.length){
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#718398;padding:24px;">Sin resultados</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(function(l){
+    var statusLabel = l.expired ? 'vencida' : l.status;
+    var daysLeft = l.daysLeft !== null && l.daysLeft !== undefined ? l.daysLeft + 'd' : '∞';
+    var lastSeen = l.lastSeen ? new Date(l.lastSeen).toLocaleDateString('es-US') : '—';
+    return '<tr>'
+      + '<td class="mono">' + (l.code||'') + '</td>'
+      + '<td><strong>' + esc(l.client||'—') + '</strong><br><small style="color:#718398">' + esc(l.email||'') + '</small></td>'
+      + '<td>' + esc(l.plan||'—') + '</td>'
+      + '<td><span class="badge ' + statusLabel + '">' + statusLabel.toUpperCase() + '</span></td>'
+      + '<td>' + esc(l.stationName||'—') + '</td>'
+      + '<td style="' + (l.daysLeft !== null && l.daysLeft < 30 ? 'color:#ffd37a' : '') + '">' + daysLeft + '</td>'
+      + '<td>' + lastSeen + '</td>'
+      + '<td>' + esc(l.version||'—') + '</td>'
+      + '<td><button class="btn secondary" style="padding:5px 10px;font-size:11px;" onclick="copyCode(\'' + l.code + '\')">Copiar</button>'
+      + ' <button class="btn primary" style="padding:5px 10px;font-size:11px;background:#7f1d1d;" onclick="revokeLicense(\'' + l.code + '\')">Revocar</button></td>'
+      + '</tr>';
+  }).join('');
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function copyCode(code){
+  navigator.clipboard.writeText(code).then(function(){ toast('Código copiado: ' + code); });
+}
+
+async function revokeLicense(code){
+  if(!confirm('¿Revocar la licencia ' + code + '? Esta acción es irreversible.')) return;
+  var reason = prompt('Motivo de revocación (opcional):') || '';
+  try{
+    var res = await fetch(getServerUrl() + '/api/license/revoke', {
+      method:'POST',
+      headers:{ 'content-type':'application/json', Authorization:'Bearer ' + getSecret() },
+      body: JSON.stringify({ code, reason })
+    });
+    if(res.ok){ toast('Licencia revocada'); loadLicenses(); }
+    else toast('Error al revocar','#c9033b');
+  }catch(e){ toast('Error de conexión','#c9033b'); }
+}
+
+function openGenerateModal(){ document.getElementById('gen-modal').classList.add('open'); document.getElementById('gen-result').style.display='none'; }
+function closeGenerateModal(){ document.getElementById('gen-modal').classList.remove('open'); loadLicenses(); }
+
+async function generateLicense(){
+  var client = document.getElementById('gen-client').value.trim();
+  var email = document.getElementById('gen-email').value.trim();
+  var plan = document.getElementById('gen-plan').value;
+  var days = parseInt(document.getElementById('gen-days').value);
+  var notes = document.getElementById('gen-notes').value.trim();
+  if(!client){ toast('Ingresá el nombre del cliente','#c99b22'); return; }
+  try{
+    var res = await fetch(getServerUrl() + '/api/license/generate', {
+      method:'POST',
+      headers:{ 'content-type':'application/json', Authorization:'Bearer ' + getSecret() },
+      body: JSON.stringify({ client, email, plan, days: days||365, noExpiry: days===0, notes })
+    });
+    var data = await res.json();
+    if(data.ok){
+      document.getElementById('gen-result').style.display = 'block';
+      document.getElementById('gen-code').textContent = data.code;
+      toast('Licencia generada: ' + data.code);
+    }else{
+      toast('Error: ' + data.error,'#c9033b');
+    }
+  }catch(e){ toast('Error de conexión','#c9033b'); }
+}
+
+function copyGenCode(){
+  var code = document.getElementById('gen-code').textContent;
+  navigator.clipboard.writeText(code).then(function(){ toast('Código copiado'); });
+}
+
+function exportCsv(){
+  var header = 'Código,Cliente,Email,Plan,Estado,Emisora,Días restantes,Activado,Vence,Versión\n';
+  var rows = _licenses.map(function(l){
+    return [l.code,l.client,l.email,l.plan,l.status,l.stationName||'',l.daysLeft||'∞',l.activatedAt||'',l.expiresAt||'',l.version||''].map(function(v){ return '"'+String(v||'').replace(/"/g,'""')+'"'; }).join(',');
+  }).join('\n');
+  var blob = new Blob(['﻿'+header+rows],{type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'licencias-imagen-media-club-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+</script>
+</body>
+</html>
