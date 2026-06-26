@@ -226,6 +226,44 @@ http.createServer(async (req, res) => {
     return res.end(widgetJs);
   }
 
+  // ── STREAM PROXY ───────────────────────────────────────────────────────────
+  // GET /stream → proxies http://ohradio.cc:8058/stream sobre HTTPS sin timeout
+  // Reemplaza al stream-proxy.php de Hostinger que se corta cada 30-60s.
+  if (url.pathname === "/stream" && req.method === "GET") {
+    const opts = {
+      hostname: "ohradio.cc",
+      port: 8058,
+      path: "/stream",
+      method: "GET",
+      headers: {
+        "User-Agent": "CiudadRadio-Proxy/2.0",
+        "Icy-MetaData": req.headers["icy-metadata"] || "0"
+      }
+    };
+    const proxyReq = http.request(opts, (proxyRes) => {
+      const fwd = {
+        "Content-Type": proxyRes.headers["content-type"] || "audio/mpeg",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache, no-store",
+        "Transfer-Encoding": "chunked"
+      };
+      for (const [k, v] of Object.entries(proxyRes.headers)) {
+        if (k.toLowerCase().startsWith("icy-")) fwd[k] = v;
+      }
+      res.writeHead(200, fwd);
+      proxyRes.pipe(res, { end: true });
+      req.on("close", () => { proxyReq.destroy(); });
+    });
+    proxyReq.on("error", (err) => {
+      if (!res.headersSent) {
+        res.writeHead(502, { "Content-Type": "text/plain", "Access-Control-Allow-Origin": "*" });
+        res.end("Stream proxy error: " + err.message);
+      } else { res.destroy(); }
+    });
+    proxyReq.end();
+    return;
+  }
+
   return json(res, 404, { ok: false, error: "Ruta no encontrada" });
 
 }).listen(PORT, () => {
